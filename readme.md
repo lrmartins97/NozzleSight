@@ -1,3 +1,32 @@
+# NozzleSight
+
+Camera-based XY (and Z) alignment between the tools of a multi-tool Klipper printer.
+NozzleSight is a fork of [kTAMV](https://github.com/TypQxQ/kTAMV) by TypQxQ, extended for IDEX
+machines with one or more nozzle cameras (developed on the M-BIND syringe printer).
+
+**What this fork adds to kTAMV**
+
+- `server/nozzle_detector.py` and changes to `ktamv_server.py` / `ktamv_server_dm.py`: nozzle detector tuned for the machine's cameras.
+- `extension/idex_camera_focus.py`, `extension/idex_z_offset.py`, `extension/tool_cameras.py`: Klipper modules for camera focus, Z offset between tools and per-tool cameras.
+- `tools/`: scripts to tune and diagnose a camera (focus, Z, exposure, light, frame capture, detector and repeatability tests).
+- `doc/procedimento_camara_ktamv.pdf`: procedure to install and tune a new camera (Portuguese).
+- `install.sh`: works on Debian 13 (libopenblas-dev instead of the removed libatlas-base-dev), can be re-run as an update, links all modules and respects configurations split across included files.
+
+Internally the names stay the same as kTAMV (`[ktamv]` section, `kTAMV_server` service, `~/kTAMV` folder), so existing configurations keep working.
+
+**Install**
+
+```
+cd ~/ && git clone https://github.com/lrmartins97/NozzleSight.git kTAMV && bash ~/kTAMV/install.sh
+```
+
+**License and credit**
+
+GPL v3, same as kTAMV (see `LICENSE`). Original work by [TypQxQ](https://github.com/TypQxQ/kTAMV);
+the detection approach comes from TAMV/kTAMV. The original documentation follows below.
+
+---
+
 <p align="center">
   <h1 align="center">kTAMV - Klipper Tool Alignment (using) Machine Vision</h1>
   <img src="doc/mainsail_main.jpg?raw=true" alt='screenshot of UI' width='800'>
@@ -53,7 +82,7 @@ be ready to hit 'emergency stop' at any time!
 Connect to your klipper machine using SSH, run these command
 
 ```bash
-cd ~/ && git clone https://github.com/TypQxQ/kTAMV.git && bash ~/kTAMV/install.sh
+cd ~/ && git clone https://github.com/lrmartins97/NozzleSight.git kTAMV && bash ~/kTAMV/install.sh
 ```
 
 This will install and configure everything.
