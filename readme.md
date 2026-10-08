@@ -32,7 +32,7 @@ O instalador:
 - liga os módulos ao Klipper (`~/klipper/klippy/extras/`) com atalhos, por isso uma
   atualização do repositório chega logo ao Klipper;
 - instala o serviço `kTAMV_server` (porta 8085);
-- acrescenta `[update_manager NozzleSight]` ao `moonraker.conf`, se ainda não existir (também reconhece o nome antigo `ktamv`, para não duplicar);
+- acrescenta `[update_manager nozzlesight]` ao `moonraker.conf`, se ainda não existir (também reconhece o nome antigo `ktamv`, para não duplicar);
 - acrescenta `[ktamv]` e as macros à configuração do Klipper **só se ainda não existirem**
   em nenhum ficheiro da configuração (procura também nos ficheiros incluídos), e escreve-as
   antes do bloco do SAVE_CONFIG. Faz cópia dos ficheiros que altera.
@@ -40,7 +40,7 @@ O instalador:
 Pode ser corrido outra vez numa máquina já instalada: funciona como atualização.
 Funciona em Debian 11, 12 e 13 (Raspberry Pi OS).
 
-Atualizar: no Mainsail, Máquina → Atualizações → `NozzleSight`.
+Atualizar: no Mainsail, Máquina → Atualizações → `nozzlesight`.
 
 ## Como funciona a calibração
 

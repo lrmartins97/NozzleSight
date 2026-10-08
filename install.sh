@@ -279,7 +279,7 @@ install_update_manager() {
             cp ${dest} ${next_dest}
             echo "" >> "${dest}"    # Add a blank line
             echo "" >> "${dest}"    # Add a blank line
-            echo -e "[update_manager NozzleSight]" >> "${dest}"    # Add the section header
+            echo -e "[update_manager nozzlesight]" >> "${dest}"    # Add the section header
             echo -e "type: git_repo" >> "${dest}"
             echo -e "path: ${KTAMV_REPO_DIR}" >> "${dest}"
             echo -e "origin: ${ORIGIN}" >> "${dest}"
@@ -288,7 +288,7 @@ install_update_manager() {
             echo -e "managed_services: klipper" >> "${dest}"
         else
             log_error "The update_manager entry already exists in moonraker.conf - not changing it."
-            log_important "Make sure it says 'origin: ${ORIGIN}' and that the header has one closing bracket, e.g. '[update_manager NozzleSight]'."
+            log_important "Make sure it says 'origin: ${ORIGIN}' and that the header has one closing bracket, e.g. '[update_manager nozzlesight]'."
         fi
 
     else
