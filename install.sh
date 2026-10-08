@@ -57,10 +57,11 @@ SEND_IMAGES="false"
 # Flask is used for the webserver
 # Waitress is used to serve the Flask webserver with less resources
 # Jinja2 is used by the Flask webserver
-# libatlas is used by NumPy
+# libopenblas is used by NumPy (libatlas-base-dev no longer exists in Debian 13 / trixie;
+# libopenblas-dev exists in Debian 11, 12 and 13)
 # matplotlib is to find usable fonts
 # requests is used to make HTTP requests, it's used to communicate between the server and the extension
-PKGLIST="python3 python3-pip virtualenv curl python3-matplotlib python3-numpy python3-opencv python3-pil python3-flask libatlas-base-dev python3-waitress python3-jinja2 python3-requests"
+PKGLIST="python3 python3-pip virtualenv curl python3-matplotlib python3-numpy python3-opencv python3-pil python3-flask libopenblas-dev python3-waitress python3-jinja2 python3-requests"
 
 
 #
@@ -162,6 +163,12 @@ check_for_ktamv()
 {
     # Do a basic check to see if anything is running on the specified port.
     if curl -s "http://127.0.0.1:${PORT}" >/dev/null ; then
+        # NozzleSight / kTAMV already installed here: update it (links, update
+        # manager and missing configuration) instead of stopping.
+        if [ -f "${SYSTEMDDIR}/kTAMV_server.service" ]; then
+            log_important "kTAMV_server is already installed: updating the existing installation."
+            return
+        fi
         log_important "Just a second... kTAMV or something else was detected running on port ${PORT}."
         log_blank
         log_important "This install script is used to install kTAMV for Mainsail, Fluidd, Moonraker, etc."
@@ -193,8 +200,12 @@ link_extension()
 {
     log_header "Linking extension to Klipper..."
     log_blank
-    ln -sf "${EXTENSION_PATH}/ktamv.py" "${KLIPPER_HOME}/klippy/extras/ktamv.py"
-    ln -sf "${EXTENSION_PATH}/ktamv_utl.py" "${KLIPPER_HOME}/klippy/extras/ktamv_utl.py"
+    # kTAMV client + the NozzleSight tool-calibration modules. A plain copy left
+    # in klippy/extras by a manual install is replaced by the link.
+    for module in ktamv.py ktamv_utl.py idex_camera_focus.py idex_z_offset.py tool_cameras.py; do
+        ln -sf "${EXTENSION_PATH}/${module}" "${KLIPPER_HOME}/klippy/extras/${module}"
+        log_info "Linked ${module}"
+    done
 }
 
 # 
@@ -255,24 +266,29 @@ verify_ready()
 install_update_manager() {
     log_header "Adding update manager to moonraker.conf"
     dest=${KLIPPER_CONFIG_HOME}/moonraker.conf
+    # Update from the repository this installer came from (the NozzleSight fork)
+    ORIGIN="$(git -C "${KTAMV_REPO_DIR}" remote get-url origin 2>/dev/null || true)"
+    [ -n "${ORIGIN}" ] || ORIGIN="https://github.com/lrmartins97/NozzleSight.git"
     if test -f $dest; then
-        # Backup the original printer.cfg file
-        next_dest="$(nextfilename "$dest")"
-        log_info "Copying original moonraker.conf file to ${next_dest}"
-        cp ${dest} ${next_dest}
-        already_included=$(grep -c '\[update_manager ktamv\]' ${dest} || true)
+        # Also matches the "[update_manager ktamv]]" written by older installers
+        already_included=$(grep -c '^\[update_manager ktamv\]' ${dest} || true)
         if [ "${already_included}" -eq 0 ]; then
+            # Backup the original moonraker.conf file
+            next_dest="$(nextfilename "$dest")"
+            log_info "Copying original moonraker.conf file to ${next_dest}"
+            cp ${dest} ${next_dest}
             echo "" >> "${dest}"    # Add a blank line
             echo "" >> "${dest}"    # Add a blank line
-            echo -e "[update_manager ktamv]]" >> "${dest}"    # Add the section header
+            echo -e "[update_manager ktamv]" >> "${dest}"    # Add the section header
             echo -e "type: git_repo" >> "${dest}"
-            echo -e "path: ~/kTAMV" >> "${dest}"
-            echo -e "origin: https://github.com/TypQxQ/kTAMV.git" >> "${dest}"
+            echo -e "path: ${KTAMV_REPO_DIR}" >> "${dest}"
+            echo -e "origin: ${ORIGIN}" >> "${dest}"
             echo -e "primary_branch: main" >> "${dest}"
             echo -e "install_script: install.sh" >> "${dest}"
             echo -e "managed_services: klipper" >> "${dest}"
         else
-            log_error "[update_manager ktamv] already exists in moonraker.conf - skipping installing it there"
+            log_error "[update_manager ktamv] already exists in moonraker.conf - not changing it."
+            log_important "Make sure it says 'origin: ${ORIGIN}' and that the header is '[update_manager ktamv]' (one closing bracket)."
         fi
 
     else
@@ -284,56 +300,79 @@ install_update_manager() {
 # Logic to install the configuration to Klipper
 # 
 install_klipper_config() {
-    log_header "Adding configuration to printer.cfg"
+    log_header "Adding configuration to Klipper"
 
-    # Add configuration to printer.cfg if it doesn't exist
     dest=${KLIPPER_CONFIG_HOME}/printer.cfg
-    if test -f $dest; then
-        # Backup the original printer.cfg file
-        next_dest="$(nextfilename "$dest")"
-        log_info "Copying original printer.cfg file to ${next_dest}"
-        cp ${dest} ${next_dest}
-
-        # Add the configuration to printer.cfg
-        # This example assumes that that both the server and the webcam stream are running on the same machine as Klipper
-        already_included=$(grep -c '\[ktamv\]' ${dest} || true)
-        if [ "${already_included}" -eq 0 ]; then
-            echo "" >> "${dest}"    # Add a blank line
-            echo "" >> "${dest}"    # Add a blank line
-            echo -e "[ktamv]" >> "${dest}"    # Add the section header
-            echo -e "nozzle_cam_url: http://localhost/webcam/snapshot?max_delay=0" >> "${dest}"   # Add the address of the webcam stream that will be accessed by the server
-            echo -e "server_url: http://localhost:${PORT}" >> "${dest}"    # Add the address of the kTAMV server that will be accessed Klipper
-            echo -e "move_speed: 1800" >> "${dest}"   # Add the speed at which the toolhead moves when aligning
-            echo -e "send_frame_to_cloud: ${SEND_IMAGES}" >> "${dest}"   # If true, the images of the nozzle will be sent to the developer
-            echo -e "detection_tolerance: 0" >> "${dest}"   # number of pixels to have as tolerance when detecting the nozzle.
-
-            log_info "Added kTAMV configuration to printer.cfg"
-            log_important "Please check the configuration in printer.cfg and adjust it as needed"
-        else
-            log_error "[ktamv] already exists in printer.cfg - skipping adding it there"
-        fi
-    else
+    if ! test -f $dest; then
         log_error "File printer.cfg file not found! Cannot add kTAMV configuration. Do it manually."
+        return
     fi
 
-    # Add the inclusion of macros.cfg to printer.cfg if it doesn't exist
-    already_included=$(grep -c '\[include ktamv_macros.cfg\]' ${dest} || true)
-    if [ "${already_included}" -eq 0 ]; then
-        echo "" >> "${dest}"    # Add a blank line
-        echo -e "[include ktamv-macros.cfg]" >> "${dest}"    # Add the section header
-    else
-        log_error "[include ktamv-macros.cfg] already exists in printer.cfg - skipping adding it there"
+    # [ktamv] and the kTAMV macros may live in any file of the config, also in
+    # subfolders (included from printer.cfg). Klipper's own SAVE_CONFIG backups
+    # (printer-YYYYMMDD_HHMMSS.cfg) are ignored.
+    has_section=$(grep -rlE --include='*.cfg' --exclude='printer-*.cfg' '^\[ktamv\]' "${KLIPPER_CONFIG_HOME}" 2>/dev/null | head -n 1 || true)
+    has_macros=$(grep -rlE --include='*.cfg' --exclude='printer-*.cfg' '^\[gcode_macro CALIB_CAMERA_KTAMV\]' "${KLIPPER_CONFIG_HOME}" 2>/dev/null | head -n 1 || true)
+
+    if [ -n "${has_section}" ] && [ -n "${has_macros}" ]; then
+        log_info "kTAMV is already configured (${has_section#${KLIPPER_CONFIG_HOME}/}, ${has_macros#${KLIPPER_CONFIG_HOME}/}): not changing the configuration."
+        return
     fi
-    
-    if [ ! -f "${KLIPPER_CONFIG_HOME}/ktamv-macros.cfg" ]; then
-        log_info "Copying ktamv-macros.cfg to ${KLIPPER_CONFIG_HOME}"
-        cp ${KTAMV_REPO_DIR}/ktamv-macros.cfg ${KLIPPER_CONFIG_HOME}
+
+    # Backup the original printer.cfg file
+    next_dest="$(nextfilename "$dest")"
+    log_info "Copying original printer.cfg file to ${next_dest}"
+    cp ${dest} ${next_dest}
+
+    block=""
+    if [ -z "${has_section}" ]; then
+        # This example assumes that that both the server and the webcam stream are running on the same machine as Klipper
+        block="${block}[ktamv]
+nozzle_cam_url: http://localhost/webcam/snapshot?max_delay=0
+server_url: http://localhost:${PORT}
+move_speed: 1800
+send_frame_to_cloud: ${SEND_IMAGES}
+detection_tolerance: 0
+"
+        log_info "Adding the [ktamv] section to printer.cfg"
+        log_important "Please check the configuration in printer.cfg and adjust it as needed"
     else
-        log_error "[include ktamv-macros.cfg] already exists in printer.cfg - skipping adding it there"
+        log_error "[ktamv] already exists in ${has_section#${KLIPPER_CONFIG_HOME}/} - not adding it again"
     fi
+    if [ -z "${has_macros}" ]; then
+        if [ ! -f "${KLIPPER_CONFIG_HOME}/ktamv-macros.cfg" ]; then
+            log_info "Copying ktamv-macros.cfg to ${KLIPPER_CONFIG_HOME}"
+            cp ${KTAMV_REPO_DIR}/ktamv-macros.cfg ${KLIPPER_CONFIG_HOME}
+        fi
+        block="${block}
+[include ktamv-macros.cfg]
+"
+    else
+        log_error "The kTAMV macros already exist in ${has_macros#${KLIPPER_CONFIG_HOME}/} - not adding them again"
+    fi
+
+    insert_before_save_config "${dest}" "${block}"
+
     # Restart Klipper
     restart_klipper
+}
 
+#
+# Adds text to printer.cfg BEFORE Klipper's SAVE_CONFIG block (anything written
+# after that block breaks SAVE_CONFIG). Without the block, adds it at the end.
+#
+insert_before_save_config() {
+    local file="$1"
+    local marker='#*# <---------------------- SAVE_CONFIG ---------------------->'
+    if grep -qF -- "${marker}" "${file}"; then
+        NS_TEXT="$2" NS_MARK="${marker}" awk '
+            index($0, ENVIRON["NS_MARK"]) == 1 && !done { print ENVIRON["NS_TEXT"]; done = 1 }
+            { print }' "${file}" > "${file}.nozzlesight-tmp"
+        cat "${file}.nozzlesight-tmp" > "${file}"
+        rm -f "${file}.nozzlesight-tmp"
+    else
+        printf '\n%s\n' "$2" >> "${file}"
+    fi
 }
 
 # 
@@ -458,7 +497,7 @@ log_blank
 log_blank
 log_blank
 log_blank
-log_header "                     kTAMV"
+log_header "             NozzleSight (based on kTAMV)"
 log_header "   Klipper Tool Alignment (using) Machine Vision"
 log_blank
 log_blank
@@ -497,7 +536,7 @@ log_blank
 log_blank
 log_blank
 log_blank
-log_header "                     kTAMV"
+log_header "             NozzleSight (based on kTAMV)"
 log_header "   Klipper Tool Alignment (using) Machine Vision"
 log_blank
 log_blank
@@ -535,11 +574,15 @@ while getopts "k:c:m:ids" arg; do
 done
 
 function nextfilename {
+    # Work on the file name only, so dots in directory names don't break the path
     local name="$1"
+    local dir base
+    dir="$(dirname "${name}")"
+    base="$(basename "${name}")"
     if [ -d "${name}" ]; then
-        printf "%s-%s" ${name%%.*} $(date '+%Y%m%d_%H%M%S')
+        printf "%s/%s-%s" "${dir}" "${base%%.*}" "$(date '+%Y%m%d_%H%M%S')"
     else
-        printf "%s-%s.%s-old" ${name%%.*} $(date '+%Y%m%d_%H%M%S') ${name#*.}
+        printf "%s/%s-%s.%s-old" "${dir}" "${base%%.*}" "$(date '+%Y%m%d_%H%M%S')" "${base#*.}"
     fi
 }
 
@@ -577,4 +620,4 @@ install_klipper_config
 
 log_blank
 log_blank
-log_important "kTAMV is now installed. Settings can be found in the printer.cfg file."
+log_important "NozzleSight is installed. Settings: the [ktamv] section of your Klipper configuration."
