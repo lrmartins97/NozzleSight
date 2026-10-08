@@ -8,8 +8,8 @@
 #
 # Comando (chamado pela macro CALIBRATE_IDEX_CAMERA_FOCUS, que prepara a
 # maquina: home, limpeza, luz, T0 em cima da camara):
-#   IDEX_CAMERA_FOCUS_SCAN [ZMIN=<z> ZMAX=<z>] [SAVE=0|1]
-#   Sem ZMIN/ZMAX percorre range mm para cada lado do foco atual.
+#   IDEX_CAMERA_FOCUS_SCAN [Z_MIN=<z> Z_MAX=<z>] [SAVE=0|1]
+#   (ZMIN/ZMAX tambem sao aceites.) Sem Z_MIN/Z_MAX percorre range mm para cada lado do foco atual.
 #
 # Como mede:
 #   1. Com o T0 em cima da camara, pede ao servidor kTAMV a posicao da ponta
@@ -232,8 +232,13 @@ class IdexCameraFocus:
             raise gcmd.error("O foco mede-se com o T0 ativo.")
         z0, z0_src = self._current_focus()
         axis_max = th_status['axis_maximum'].z - 0.1
-        zmin_p = gcmd.get_float('ZMIN', None)
-        zmax_p = gcmd.get_float('ZMAX', None)
+        # Z_MIN/Z_MAX (os nomes da macro); ZMIN/ZMAX continuam aceites
+        zmin_p = gcmd.get_float('Z_MIN', None)
+        if zmin_p is None:
+            zmin_p = gcmd.get_float('ZMIN', None)
+        zmax_p = gcmd.get_float('Z_MAX', None)
+        if zmax_p is None:
+            zmax_p = gcmd.get_float('ZMAX', None)
         if (zmin_p is None) != (zmax_p is None):
             self._vision_off()
             raise gcmd.error("Indica os dois limites (Z_MIN e Z_MAX), ou nenhum.")
