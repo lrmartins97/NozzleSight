@@ -5,11 +5,16 @@ from PIL import Image, ImageDraw, ImageFont  #, ImageFile
 from argparse import ArgumentParser
 import matplotlib.font_manager as fm
 from waitress import serve
-import logging, json, traceback
+import logging, json, traceback, collections
 from dataclasses import dataclass, field
 from ktamv_server_dm import Ktamv_Server_Detection_Manager as dm
+from ktamv_server_dm import reset_nozzle_detector
 
-__logdebug = ""
+# Log de depuracao mostrado na pagina do servidor. Guarda so' as ultimas
+# LOG_MAX_LINES linhas: um texto a crescer sem fim tornava o servidor cada vez
+# mais lento (em horas de uso, cada imagem demorava quase o dobro).
+LOG_MAX_LINES = 3000
+__logdebug = collections.deque(maxlen=LOG_MAX_LINES)
 # URL to the cloud server
 __CLOUD_URL = "http://ktamv.ignat.se/index.php"
 # If no nozzle found in this time, timeout the function
@@ -64,6 +69,43 @@ request_results = dict()
 # The transform matrix calculated from the calibration points
 _transformMatrix = None
 
+# A matriz da camara (pixeis -> mm) e' gravada neste ficheiro sempre que a
+# camara e' calibrada, e lida quando o servidor arranca: reiniciar o servidor
+# deixa de apagar a calibracao da camara. Apagar o ficheiro = sem calibracao.
+MATRIX_FILE = os.path.expanduser("~/printer_data/config/ktamv_camera_matrix.json")
+_matrix_calibrated_at = None
+
+
+def _save_matrix(matrix, n_points):
+    global _matrix_calibrated_at
+    _matrix_calibrated_at = time.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        tmp = MATRIX_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump({"matrix": np.asarray(matrix).tolist(),
+                       "calibrated_at": _matrix_calibrated_at,
+                       "points": int(n_points)}, f, indent=1)
+        os.replace(tmp, MATRIX_FILE)
+    except Exception as e:
+        log("Error: could not save camera matrix to %s: %s" % (MATRIX_FILE, str(e)))
+
+
+def _load_matrix():
+    global _transformMatrix, _matrix_calibrated_at
+    try:
+        if not os.path.exists(MATRIX_FILE):
+            return
+        with open(MATRIX_FILE) as f:
+            data = json.load(f)
+        m = np.array(data["matrix"], dtype=float)
+        if m.shape != (2, 6) or not np.all(np.isfinite(m)):
+            raise ValueError("matriz com formato invalido %s" % (m.shape,))
+        _transformMatrix = m
+        _matrix_calibrated_at = data.get("calibrated_at")
+    except Exception as e:
+        _transformMatrix = None
+        logging.getLogger(__name__).warning("Camera matrix file ignored: %s", e)
+
 
 @dataclass
 class Ktamv_Request_Result:
@@ -102,6 +144,7 @@ def calculate_camera_to_space_matrix():
                 transform = np.linalg.lstsq(A, real_coords, rcond=None)
                 global _transformMatrix
                 _transformMatrix = transform[0].T
+                _save_matrix(_transformMatrix, n)
                 return "OK", 200
     except Exception as e:
         show_error_message_to_image("Error: Could not calculate image to space matrix.")
@@ -123,6 +166,11 @@ def calculate_offset_from_matrix():
             log("JSON Decode Error")
             return "JSON Decode Error", 400
         
+        if _transformMatrix is None:
+            msg = "Camara nao calibrada: corre CALIBRATE_IDEX_XY_AUTO RECALIBRAR_CAMARA=1"
+            show_error_message_to_image(msg)
+            log(msg)
+            return msg, 409
         offsets = -1 * (0.55 * _transformMatrix @ _v)
         return jsonify(offsets.tolist())
     except Exception as e:
@@ -140,6 +188,10 @@ def set_server_cfg():
         # Stoping preview if running
         global __preview_running, __detection_tolerance, __send_frame_to_cloud
         __preview_running = False
+
+        # O detetor esquece a ponta que estava a seguir: a proxima medicao pode
+        # ser de outra ferramenta (as macros enviam a configuracao antes de cada uma)
+        reset_nozzle_detector()
         
         # Get the camera path from the JSON object
         try:
@@ -196,6 +248,11 @@ def put_frame(frame):
     try:
         global __processed_frame_as_image, __update_static_image
         # Convert the frame to a PIL Image
+        # O OpenCV guarda as cores por ordem azul-verde-vermelho (BGR) e o PIL
+        # espera vermelho-verde-azul (RGB): sem inverter, o azul e o vermelho
+        # ficavam trocados na imagem do VAOC (imagem amarelada).
+        if frame.ndim == 3 and frame.shape[2] == 3:
+            frame = np.ascontiguousarray(frame[:, :, ::-1])
         __processed_frame_as_image = Image.fromarray(frame)
         __update_static_image = True
         
@@ -222,7 +279,7 @@ def index():
         + str(_FRAME_HEIGHT)
         + "<br>"
     )
-    content += "Debuging log:<br>" + __logdebug + "<br>"
+    content += "Debuging log:<br>" + log_get() + "<br>"
     try:
         with open(file_path, "r", encoding="utf-8") as file:
             content += file.read()
@@ -322,6 +379,41 @@ def getNozzlePosition():
     except Exception as e:
         show_error_message_to_image("Error: Could not get nozzle position.")
         log("Error: " + str(e) + "<br>" + str(traceback.format_exc()))
+
+# Nitidez da ponta do bico na imagem atual (para CALIBRATE_IDEX_CAMERA_FOCUS).
+# Pedido simples e sincrono: tira algumas imagens e responde logo.
+@app.route("/getFocusScore")
+def getFocusScore():
+    global __preview_running
+    __preview_running = False
+    try:
+        if _camera_url is None:
+            return jsonify({"error": "Camera URL not set"}), 502
+        try:
+            frames = int(request.args.get("frames", 3))
+        except ValueError:
+            frames = 3
+        roi = None
+        if all(k in request.args for k in ("cx", "cy", "r")):
+            try:
+                roi = (float(request.args["cx"]), float(request.args["cy"]), float(request.args["r"]))
+            except ValueError:
+                roi = None
+        detection_manager = dm(log, _camera_url, cloud_url="", send_to_cloud=False)
+        result = detection_manager.focus_score(frames=min(max(frames, 1), 10), roi=roi)
+        if result is None:
+            return jsonify({"error": "No frames from camera"}), 502
+        return jsonify(result), 200
+    except Exception as e:
+        log("Error: " + str(e) + "<br>" + str(traceback.format_exc()))
+        return jsonify({"error": str(e)}), 500
+
+# Se o servidor tem a matriz da camara (para a calibracao X/Y decidir se tem
+# de calibrar a camara primeiro)
+@app.route("/hasMatrix")
+def hasMatrix():
+    return jsonify({"ok": _transformMatrix is not None,
+                    "calibrated_at": _matrix_calibrated_at}), 200
 
 @app.route("/preview", methods=["POST"])
 def preview():
@@ -470,18 +562,15 @@ def drawTextOnFrame(usedFrame, text, row=1, row_width=640):
 
 
 def log_clear():
-    global __logdebug
-    __logdebug = ""
+    __logdebug.clear()
 
 
 def log(message: str):
-    global __logdebug
-    __logdebug += message + "<br>"
+    __logdebug.append(message)
 
 
 def log_get():
-    global __logdebug
-    return __logdebug
+    return "<br>".join(__logdebug) + ("<br>" if __logdebug else "")
 
 def show_error_message_to_image(message : str):
     global __error_message_to_image, __update_static_image
@@ -489,6 +578,9 @@ def show_error_message_to_image(message : str):
     __update_static_image = True
 
 # Run the app on the specified port
+# Carrega a matriz gravada (se existir) quando o servidor arranca
+_load_matrix()
+
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
