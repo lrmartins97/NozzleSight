@@ -270,8 +270,8 @@ install_update_manager() {
     ORIGIN="$(git -C "${KTAMV_REPO_DIR}" remote get-url origin 2>/dev/null || true)"
     [ -n "${ORIGIN}" ] || ORIGIN="https://github.com/lrmartins97/NozzleSight.git"
     if test -f $dest; then
-        # Also matches the "[update_manager ktamv]]" written by older installers
-        already_included=$(grep -c '^\[update_manager ktamv\]' ${dest} || true)
+        # Also matches the old name (ktamv) and the "[update_manager ktamv]]" of older installers
+        already_included=$(grep -ciE '^\[update_manager (ktamv|nozzlesight)\]' ${dest} || true)
         if [ "${already_included}" -eq 0 ]; then
             # Backup the original moonraker.conf file
             next_dest="$(nextfilename "$dest")"
@@ -279,7 +279,7 @@ install_update_manager() {
             cp ${dest} ${next_dest}
             echo "" >> "${dest}"    # Add a blank line
             echo "" >> "${dest}"    # Add a blank line
-            echo -e "[update_manager ktamv]" >> "${dest}"    # Add the section header
+            echo -e "[update_manager NozzleSight]" >> "${dest}"    # Add the section header
             echo -e "type: git_repo" >> "${dest}"
             echo -e "path: ${KTAMV_REPO_DIR}" >> "${dest}"
             echo -e "origin: ${ORIGIN}" >> "${dest}"
@@ -287,8 +287,8 @@ install_update_manager() {
             echo -e "install_script: install.sh" >> "${dest}"
             echo -e "managed_services: klipper" >> "${dest}"
         else
-            log_error "[update_manager ktamv] already exists in moonraker.conf - not changing it."
-            log_important "Make sure it says 'origin: ${ORIGIN}' and that the header is '[update_manager ktamv]' (one closing bracket)."
+            log_error "The update_manager entry already exists in moonraker.conf - not changing it."
+            log_important "Make sure it says 'origin: ${ORIGIN}' and that the header has one closing bracket, e.g. '[update_manager NozzleSight]'."
         fi
 
     else
