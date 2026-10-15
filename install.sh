@@ -615,6 +615,11 @@ install_update_manager
 # Install kTAMV as a systemd service and then add it to the service list moonraker.asvc
 install_sysd
 
+# Make the server reachable through the Mainsail nginx at /ktamv/ (no IP in the
+# webcam URL). Not fatal: the server still works on port ${PORT} without it.
+log_header "Adding /ktamv/ to nginx"
+bash "${KTAMV_REPO_DIR}/nginx_proxy.sh" || log_error "nginx not changed - the webcam URL needs the machine IP (http://<IP>:${PORT}/image)."
+
 # Install the configuration to Klipper
 install_klipper_config
 

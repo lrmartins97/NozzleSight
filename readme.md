@@ -42,6 +42,9 @@ O instalador:
 - liga os módulos ao Klipper (`~/klipper/klippy/extras/`) com atalhos, por isso uma
   atualização do repositório chega logo ao Klipper;
 - instala o serviço `kTAMV_server` (porta 8085);
+- acrescenta ao nginx do Mainsail o endereço `/ktamv/`, que leva ao servidor
+  (`nginx_proxy.sh`). Assim a câmara do NozzleSight no Mainsail não precisa do IP da
+  máquina: **URL Snapshot** `/ktamv/image`, serviço "Adaptive MJPEG-Streamer";
 - acrescenta `[update_manager nozzlesight]` ao `moonraker.conf`, se ainda não existir (também reconhece o nome antigo `ktamv`, para não duplicar);
 - acrescenta `[ktamv]` e as macros à configuração do Klipper **só se ainda não existirem**
   em nenhum ficheiro da configuração (procura também nos ficheiros incluídos), e escreve-as
