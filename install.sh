@@ -202,7 +202,7 @@ link_extension()
     log_blank
     # kTAMV client + the NozzleSight tool-calibration modules. A plain copy left
     # in klippy/extras by a manual install is replaced by the link.
-    for module in ktamv.py ktamv_utl.py idex_camera_focus.py idex_z_offset.py tool_cameras.py; do
+    for module in ktamv.py ktamv_utl.py idex_camera_focus.py idex_z_offset.py tool_cameras.py single_error.py; do
         ln -sf "${EXTENSION_PATH}/${module}" "${KLIPPER_HOME}/klippy/extras/${module}"
         log_info "Linked ${module}"
     done

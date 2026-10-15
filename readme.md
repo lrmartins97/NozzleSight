@@ -112,6 +112,13 @@ Opções principais: `switch_position` (X,Y do switch, obrigatório), `samples` 
 - 2: se a dispersão passar do limite, não grava e mantém o valor antigo;
 - 3: se passar, bloqueia e manda para o teste do papel.
 
+### Um erro, uma notificação (`single_error.py`, secção `[single_error]`)
+Quando um comando dá erro dentro de macros, o Klipper volta a mostrar o mesmo erro em
+cada macro da cadeia (uma calibração completa mostrava a mesma mensagem cinco vezes).
+Com `[single_error]` na configuração, o erro aparece uma vez; as macros param na mesma.
+Opção: `window` (1.0 s): um erro com o mesmo texto dentro deste tempo não é mostrado
+outra vez. Não tem comandos.
+
 ### Câmaras das ferramentas (`tool_cameras.py`, secção `[tool_cameras]`)
 | Comando | Para que serve |
 |---|---|
