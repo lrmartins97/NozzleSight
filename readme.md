@@ -158,9 +158,11 @@ Correm no Pi, com o ambiente do NozzleSight:
 | `ktamv_detector_test.py frames\|grid <pasta>` | Compara o detetor novo com o antigo nas imagens capturadas. |
 | `ktamv_repeat_test.py` | Corre `CALIBRATE_IDEX_XY` várias vezes seguidas e regista resultado e offset de cada corrida. |
 
-Os scripts têm no início o caminho da câmara (`DEVICE`), o URL da imagem (`SNAPSHOT_URL`) e
-o do Moonraker. Numa máquina com outra câmara ou outra porta, muda esses valores antes de
-correr.
+Os scripts encontram sozinhos a câmara do bico: leem o caminho dela no `crowsnest.conf` da
+máquina, na câmara da porta 8081 (`/webcam2`), por isso funcionam em qualquer máquina sem
+mudar nada (`tools/nozzle_cam.py`). Para usar outra câmara: `NOZZLE_CAM_DEVICE=/dev/v4l/by-path/...`
+antes do comando. O URL da imagem (`SNAPSHOT_URL`) e o do Moonraker são iguais em todas as
+máquinas e estão no início de cada script.
 
 ## Câmara nova
 Procedimento para instalar e afinar uma câmara: `doc/procedimento_camara_ktamv.pdf`.

@@ -11,7 +11,8 @@ Uso:
 import subprocess, time, urllib.request
 import cv2, numpy as np
 
-DEVICE = "/dev/v4l/by-path/platform-xhci-hcd.0-usbv2-0:1:1.0-video-index0"
+from nozzle_cam import nozzle_cam_device   # caminho da camara do bico (crowsnest.conf)
+DEVICE = nozzle_cam_device()
 SNAPSHOT_URL = "http://localhost/webcam2/snapshot?max_delay=0"
 SETTLE_S = 0.8          # tempo para a lente se mover e sair um frame novo
 FOCUS_MIN, FOCUS_MAX = 0, 1023

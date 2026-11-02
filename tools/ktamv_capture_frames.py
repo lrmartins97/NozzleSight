@@ -13,7 +13,8 @@ No fim a camara volta a exposicao em que estava.
 """
 import os, re, subprocess, sys, time, urllib.request
 
-DEVICE = "/dev/v4l/by-path/platform-xhci-hcd.0-usbv2-0:1:1.0-video-index0"
+from nozzle_cam import nozzle_cam_device   # caminho da camara do bico (crowsnest.conf)
+DEVICE = nozzle_cam_device()
 SNAPSHOT_URL = "http://localhost/webcam2/snapshot?max_delay=0"
 DEFAULT_EXPOSURES = [20, 30, 50, 80, 120]
 OUT = os.path.expanduser("~/ktamv_frames")

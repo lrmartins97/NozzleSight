@@ -25,7 +25,8 @@ if not os.path.isfile(os.path.join(SERVER_DIR, "ktamv_server_dm.py")):
 sys.path.insert(0, SERVER_DIR)
 from ktamv_server_dm import Ktamv_Server_Detection_Manager as DM
 
-DEVICE = "/dev/v4l/by-path/platform-xhci-hcd.0-usbv2-0:1:1.0-video-index0"
+from nozzle_cam import nozzle_cam_device   # caminho da camara do bico (crowsnest.conf)
+DEVICE = nozzle_cam_device()
 SNAPSHOT_URL = "http://localhost/webcam2/snapshot?max_delay=0"
 EXPOSURES = [40, 60, 80, 100, 130, 166, 200, 250, 300, 400]
 FRAMES_PER_VALUE = 8
