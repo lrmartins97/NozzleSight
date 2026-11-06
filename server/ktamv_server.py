@@ -508,6 +508,10 @@ def image():
 
 
 def drawOnFrame(usedFrame):
+    # Antes da primeira calibracao a imagem de espera ja' diz tudo
+    if _camera_url is None:
+        return usedFrame
+
     # Get a string with the current date and time
     current_datetime = datetime.datetime.now()
     current_datetime_str = current_datetime.strftime("%Y-%m-%d %H:%M:%S.%f")
